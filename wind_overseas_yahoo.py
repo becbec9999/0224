@@ -394,21 +394,19 @@ def generate_external_long_data(end_date: str = CONFIG["end_date"]):
         _save_df(df, symbol, CONFIG["long_path"])
 
 def update_external_short_data(new_end: str = NEW_DATE):
-    """增量更新海外指数数据（基于 long_path 最新日期，存入 short_path）"""
+    """增量更新 Stooq 海外指数数据"""
     print("\n🔄 增量更新 Stooq 海外指数数据...\n")
     
-    # === 新增：读取 000300.SH 作为日期基准 ===
     target_fp = os.path.join(CONFIG["short_path"], "000300.SH.csv")
     if not os.path.exists(target_fp):
-        raise FileNotFoundError(f"❌ 基准文件不存在: {target_fp}，请先生成沪深300日度数据")
+        raise FileNotFoundError(f"❌ 基准文件不存在: {target_fp}")
     target_df = pd.read_csv(target_fp, usecols=["date"], encoding="utf-8-sig")
     target_dates = target_df["date"]
 
     starts = {sym: _read_external_latest_date(sym, CONFIG["long_path"]) for sym in EXTERNAL_SYMBOLS}
     new_data = {}
     for symbol, start in starts.items():
-        name = symbol
-        df = _fetch_clean_stooq(name, symbol, start, new_end)
+        df = _fetch_clean_stooq(symbol, symbol, start, new_end)
         if df is not None:
             new_data[symbol] = df
 
@@ -418,22 +416,25 @@ def update_external_short_data(new_end: str = NEW_DATE):
             continue
         long_df = pd.read_csv(long_fp, encoding="utf-8-sig")
         
-        # 合并新旧数据
+        # ==================== 【修改关键点】 ====================
+        # 1. 强制统一日期类型为 datetime，消除字符串与对象的差异
+        long_df["date"] = pd.to_datetime(long_df["date"])
+        short_df["date"] = pd.to_datetime(short_df["date"])
+        
+        # 2. 合并并去重
         combined = pd.concat([long_df, short_df], ignore_index=True)
         combined.drop_duplicates("date", keep="first", inplace=True)
-        combined["date"] = pd.to_datetime(combined["date"])
-        combined.sort_values("date", ascending=False, inplace=True)
-        combined["date"] = combined["date"].dt.strftime("%Y-%m-%d")
+        # ======================================================
 
-        # === 新增：步骤1 - 按 000300.SH 日期对齐 ===
+        combined.sort_values("date", ascending=False, inplace=True)
+        
+        # 对齐到 000300.SH 交易日历
         start_date = EXTERNAL_SYMBOLS[symbol]
         aligned_df = _align_to_target_dates(combined, symbol, target_dates, start_date)
-
-        # === 新增：步骤2 - 重新执行空值处理（针对对齐后的数据）===
         aligned_df = _reprocess_nulls_for_aligned(aligned_df, new_end)
 
-        # === 保存 ===
         _save_df(aligned_df, symbol, CONFIG["short_path"])
+
 
 def generate_yahoo_long_data(end_date: str = CONFIG["end_date"]):
     """生成 Yahoo 海外指数全量数据（保存到 long_path）"""
@@ -452,60 +453,45 @@ def generate_yahoo_long_data(end_date: str = CONFIG["end_date"]):
 
 # ===================== Yahoo 增量更新 =====================
 def update_yahoo_short_data(new_end: str = NEW_DATE):
-    """增量更新 Yahoo 海外指数数据（基于 long_path 最新日期，存入 short_path）"""
+    """增量更新 Yahoo 海外指数数据"""
     print("\n🔄 增量更新 Yahoo 海外指数数据...\n")
     
-    # === 读取基准日期（000300.SH）===
     target_fp = os.path.join(CONFIG["short_path"], "000300.SH.csv")
     if not os.path.exists(target_fp):
-        raise FileNotFoundError(f"❌ 基准文件不存在: {target_fp}，请先生成沪深300日度数据")
+        raise FileNotFoundError(f"❌ 基准文件不存在: {target_fp}")
     target_df = pd.read_csv(target_fp, usecols=["date"], encoding="utf-8-sig")
     target_dates = target_df["date"]
 
-
-    # 读取每个标的的增量起点
-    starts = {}
-    for sym in YAHOO_SYMBOLS:
-        fp = os.path.join(CONFIG["long_path"], f"{sym}.csv")
-        if os.path.exists(fp):
-            try:
-                date_str = pd.read_csv(fp, usecols=["date"], nrows=1).iloc[0]["date"]
-                starts[sym] = pd.to_datetime(date_str).strftime("%Y-%m-%d")
-            except Exception:
-                starts[sym] = YAHOO_SYMBOLS[sym]
-        else:
-            starts[sym] = YAHOO_SYMBOLS[sym]
-
-    # 下载增量数据
+    starts = {sym: _read_external_latest_date(sym, CONFIG["long_path"]) for sym in YAHOO_SYMBOLS}
+    
     new_data = {}
     for symbol, start in starts.items():
-        name = symbol
-        df = _fetch_clean_yahoo(name, symbol, start, new_end)
+        df = _fetch_clean_yahoo(symbol, symbol, start, new_end)
         if df is not None:
             new_data[symbol] = df
 
-    # 合并、对齐、处理空值、保存
     for symbol, short_df in new_data.items():
         long_fp = os.path.join(CONFIG["long_path"], f"{symbol}.csv")
         if not os.path.exists(long_fp):
             continue
         long_df = pd.read_csv(long_fp, encoding="utf-8-sig")
         
-        # 合并去重
+        # ==================== 【修改关键点】 ====================
+        # 1. 强制将 CSV 读取的字符串日期转为 Datetime 对象
+        long_df["date"] = pd.to_datetime(long_df["date"])
+        short_df["date"] = pd.to_datetime(short_df["date"])
+        
+        # 2. 此时去重逻辑 (drop_duplicates) 才能识别出相同的 2月5日
         combined = pd.concat([long_df, short_df], ignore_index=True)
         combined.drop_duplicates("date", keep="first", inplace=True)
-        combined["date"] = pd.to_datetime(combined["date"])
-        combined.sort_values("date", ascending=False, inplace=True)
-        combined["date"] = combined["date"].dt.strftime("%Y-%m-%d")
+        # ======================================================
 
-        # 对齐到 000300.SH 交易日历
+        combined.sort_values("date", ascending=False, inplace=True)
+
         start_date = YAHOO_SYMBOLS[symbol]
         aligned_df = _align_to_target_dates(combined, symbol, target_dates, start_date)
-
-        # 统一空值处理（填充 + 删除 end_day 空值）
         aligned_df = _reprocess_nulls_for_aligned(aligned_df, new_end)
 
-        # 保存
         _save_df(aligned_df, symbol, CONFIG["short_path"])
 
 # ===================== 执行入口 =====================
