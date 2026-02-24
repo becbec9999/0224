@@ -11,11 +11,14 @@ warnings.filterwarnings('ignore', category=FutureWarning)
 
 
 # ===================== 配置 =====================
-NEW_DATE="2026-2-20"
+NEW_DATE="2026-2-24"
 CONFIG = {
     "end_date": "2026-02-05",
     "long_path": r"/Users/zjy/python/ETF/ETF跟踪指数量价数据-非日度更新/",
     "short_path": r"/Users/zjy/python/ETF/ETF跟踪指数量价数据-日度更新/",
+
+    # "long_path":  r"/Users/ningxinwang/Desktop/原始数据/指数量价数据-非日度更新/",
+    # "short_path": r"/Users/ningxinwang/Desktop/原始数据/指数量价数据-日度更新/",
     "wind_params": {
         "Days": "Trading",        # 仅抓取交易日数据
         "Fill": "Blank",          # 空值（代码层不额外处理）
@@ -182,23 +185,23 @@ def _reprocess_nulls_for_aligned(df: pd.DataFrame, end: str) -> pd.DataFrame:
 # ===================== 数据抓取与清洗 =====================
 def _fetch_clean(symbol: str, start: str, end: str, params: dict) -> pd.DataFrame | None:
     """从Wind获取并清洗量价数据（open/close/high/low/volume）"""
-    raw = w.wsd(symbol, "open,close,high,low,volume", start, end, _wind_opts(params))
+    raw = w.wsd(symbol, "open,close,high,low,volume,amt,free_turn", start, end, _wind_opts(params))
     if raw.ErrorCode != 0 or not raw.Data:
         print(f"⚠️ {symbol}: 无有效数据")
         return None
 
-    df = pd.DataFrame(raw.Data, index=["open","close","high","low","volume"], columns=raw.Times).T
+    df = pd.DataFrame(raw.Data, index=["open","close","high","low","volume","amt","free_turn"], columns=raw.Times).T
     df.reset_index(inplace=True)
-    df.columns = ["date", "open", "close", "high", "low", "volume"]
+    df.columns = ["date", "open", "close", "high", "low", "volume", "amt", "free_turn"]
     df["date"] = pd.to_datetime(df["date"])
     df.replace([np.inf, -np.inf], np.nan, inplace=True)
 
 
 # 标记含空值的行
     price_cols = ["open", "close", "high", "low"]
-    vol_col = "volume"
+    vol_cols = ["volume", "amt"]
     # 标记含空值的行
-    mask_null = df[price_cols + [vol_col]].isnull().any(axis=1)
+    mask_null = df[price_cols + vol_cols].isnull().any(axis=1)
     if mask_null.any():
         end_date = pd.to_datetime(end).date()
         is_end_day = df["date"].dt.date == end_date
@@ -213,12 +216,12 @@ def _fetch_clean(symbol: str, start: str, end: str, params: dict) -> pd.DataFram
 
         # 关键：Wind 是降序 → 用 bfill 实现“用前一个交易日（时间上更早）填充”
         if not df.empty:
-            was_null = df[price_cols + [vol_col]].isnull().any(axis=1)
+            was_null = df[price_cols + vol_cols].isnull().any(axis=1)
             # 在降序数据中，bfill = 用下一行（时间更早）填充当前空值
-            df[price_cols + [vol_col]] = df[price_cols + [vol_col]].fillna(method='bfill')
+            df[price_cols + vol_cols] = df[price_cols + vol_cols].fillna(method='bfill')
             
             # 检查哪些空值被成功填充
-            now_valid = ~df[price_cols + [vol_col]].isnull().any(axis=1)
+            now_valid = ~df[price_cols + vol_cols].isnull().any(axis=1)
             filled_mask = was_null & now_valid
             if filled_mask.any():
                 filled_dates = df[filled_mask]["date"].dt.strftime("%Y-%m-%d").unique()
@@ -321,18 +324,15 @@ def _fetch_clean_yahoo(name: str, symbol: str, start: str, end_date: str) -> pd.
     df.rename(columns={df.columns[0]: "date"}, inplace=True)
     df = df[["date", "open", "close", "high", "low", "volume"]].copy()
     df["date"] = pd.to_datetime(df["date"])
+    
+    # 【新增】：将 Yahoo 返回的 0 替换为 NaN，以便后续 format_volume 统一处理
+    df.replace(0, np.nan, inplace=True)
     df.replace([np.inf, -np.inf], np.nan, inplace=True)
 
     for col in ["open", "close", "high", "low", "volume"]:
         df[col] = pd.to_numeric(df[col], errors='coerce')
 
-    # 转为降序（最新在前）
     df.sort_values("date", ascending=False, inplace=True)
-
-    if df.empty:
-        return None
-
-    print(f"✅ {name} ({symbol}): 抓取 {len(df)} 条原始数据")
     return df
 
 # ===================== 主流程 =====================
@@ -500,8 +500,8 @@ if __name__ == "__main__":
     # generate_long_data()
     update_short_data()
 
-    # Stooq 海外数据
-    # generate_external_long_data(end_date=CONFIG["end_date"])
+    # # Stooq 海外数据
+    # # generate_external_long_data(end_date=CONFIG["end_date"])
     update_external_short_data(new_end=NEW_DATE)
 
     # generate_yahoo_long_data(end_date=CONFIG["end_date"])
