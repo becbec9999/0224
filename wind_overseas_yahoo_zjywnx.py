@@ -73,34 +73,50 @@ def _wind_opts(params: dict) -> str:
     """生成Wind API参数字符串"""
     return ";".join(f"{k}={v}" for k, v in params.items())
 
+
+def _get_safe_filename(symbol: str) -> str:
+    """内部辅助函数：将带 ^ 的代码转为安全的文件名 (如 ^N225 -> N225)"""
+    return symbol[1:] if symbol.startswith('^') else symbol
+
 def _save_df(df: pd.DataFrame, symbol: str, path: str):
-    """保存DataFrame为CSV（自动创建目录）"""
-    os.makedirs(path, exist_ok=True)  # ← 直接内联
-    fp = os.path.join(path, f"{symbol}.csv")
+    """保存 DataFrame 为 CSV（自动处理文件名开头的 ^）"""
+    os.makedirs(path, exist_ok=True)
+    # 使用辅助函数获取不含 ^ 的文件名
+    file_name = _get_safe_filename(symbol)
+    fp = os.path.join(path, f"{file_name}.csv")
+    # 保存数据
     df.fillna("").to_csv(fp, index=False, encoding="utf-8-sig")
-    print(f"✅ {symbol}: 已保存至 {fp}")
+    print(f"✅ {symbol}: 数据已保存至 {fp}")
 
 def _read_latest_date(symbol: str, path: str) -> str:
-    """从已有CSV读取wind最新日期（用于增量起点）"""
-    fp = os.path.join(path, f"{symbol}.csv")
-    if not os.path.exists(fp):
-        return CONFIG["symbols"][symbol]
-    try:
-        date_str = pd.read_csv(fp, usecols=["date"], nrows=1).iloc[0]["date"]
-        return pd.to_datetime(date_str).strftime("%Y-%m-%d")
-    except Exception:
-        return CONFIG["symbols"][symbol]
+    """从已有 CSV 读取 Wind 最新日期（已同步文件名处理逻辑）"""
+    file_name = _get_safe_filename(symbol)
+    fp = os.path.join(path, f"{file_name}.csv")
     
-def _read_external_latest_date(symbol: str, path: str) -> str:
-    """从已有CSV读取海外标的最新日期（用于增量起点）"""
-    fp = os.path.join(path, f"{symbol}.csv")
     if not os.path.exists(fp):
-        return EXTERNAL_SYMBOLS[symbol]
+        return CONFIG["symbols"].get(symbol, "2006-01-04")
+    try:
+        # 只读第一行日期
+        date_str = pd.read_csv(fp, usecols=["date"], nrows=1).iloc[0]["date"]
+        return pd.to_datetime(date_str).strftime("%Y-%m-%d")
+    except Exception:
+        return CONFIG["symbols"].get(symbol, "2006-01-04")
+
+def _read_external_latest_date(symbol: str, path: str) -> str:
+    """从已有 CSV 读取海外标的最新日期（已同步文件名处理逻辑）"""
+    file_name = _get_safe_filename(symbol)
+    fp = os.path.join(path, f"{file_name}.csv")
+    
+    # 默认起始日期查找逻辑
+    default_start = YAHOO_SYMBOLS.get(symbol, EXTERNAL_SYMBOLS.get(symbol, "2006-01-04"))
+    
+    if not os.path.exists(fp):
+        return default_start
     try:
         date_str = pd.read_csv(fp, usecols=["date"], nrows=1).iloc[0]["date"]
         return pd.to_datetime(date_str).strftime("%Y-%m-%d")
     except Exception:
-        return EXTERNAL_SYMBOLS[symbol]
+        return default_start
     
 
 def _align_to_target_dates(raw_df: pd.DataFrame, symbol: str, target_dates: pd.Series, start_date: str) -> pd.DataFrame:
@@ -412,7 +428,9 @@ def update_external_short_data(new_end: str = NEW_DATE):
             new_data[symbol] = df
 
     for symbol, short_df in new_data.items():
-        long_fp = os.path.join(CONFIG["long_path"], f"{symbol}.csv")
+        # 【关键修复】：这里的文件名必须过一遍 _get_safe_filename
+        safe_name = _get_safe_filename(symbol)
+        long_fp = os.path.join(CONFIG["long_path"], f"{safe_name}.csv")
         if not os.path.exists(long_fp):
             continue
         long_df = pd.read_csv(long_fp, encoding="utf-8-sig")
@@ -452,7 +470,6 @@ def generate_yahoo_long_data(end_date: str = CONFIG["end_date"]):
         _save_df(df, symbol, CONFIG["long_path"])
 
 
-# ===================== Yahoo 增量更新 =====================
 def update_yahoo_short_data(new_end: str = NEW_DATE):
     """增量更新 Yahoo 海外指数数据"""
     print("\n🔄 增量更新 Yahoo 海外指数数据...\n")
