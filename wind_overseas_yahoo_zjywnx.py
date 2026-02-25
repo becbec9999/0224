@@ -59,11 +59,12 @@ EXTERNAL_SYMBOLS = {
     # "^NKX": "2006-01-04",      # 日经225指数
     # "1321.JP": "2007-07-30",   # 日经225 ETF (野村)
     "^DAX": "2006-01-04",      # 德国DAX指数
-    "EXS1.DE": "2007-01-04"    # 德国DAX ETF (iShares)
+    # "EXS1.DE": "2007-01-04"    # 德国DAX ETF (iShares)
 }
 
 YAHOO_SYMBOLS = {
-    "^N225": "2006-01-04",      # 日经225指数（现货）
+    # "^N225": "2006-01-04",      # 日经225指数（现货）
+    "1321.T": "2006-01-04",     # 日经225ETF（现货）
 }
 
 
@@ -199,7 +200,7 @@ def _fetch_clean(symbol: str, start: str, end: str, params: dict) -> pd.DataFram
 
 # 标记含空值的行
     price_cols = ["open", "close", "high", "low"]
-    vol_cols = ["volume", "amt"]
+    vol_cols = ["volume"]
     # 标记含空值的行
     mask_null = df[price_cols + vol_cols].isnull().any(axis=1)
     if mask_null.any():
@@ -500,8 +501,8 @@ if __name__ == "__main__":
     # generate_long_data()
     update_short_data()
 
-    # # Stooq 海外数据
-    # # generate_external_long_data(end_date=CONFIG["end_date"])
+    # Stooq 海外数据
+    # generate_external_long_data(end_date=CONFIG["end_date"])
     update_external_short_data(new_end=NEW_DATE)
 
     # generate_yahoo_long_data(end_date=CONFIG["end_date"])
