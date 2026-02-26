@@ -11,7 +11,7 @@ warnings.filterwarnings('ignore', category=FutureWarning)
 
 
 # ===================== 配置 =====================
-NEW_DATE="2026-2-24"
+NEW_DATE="2026-2-25"
 CONFIG = {
     "end_date": "2026-02-05",
     "long_path": r"/Users/zjy/python/ETF/ETF跟踪指数量价数据-非日度更新/",
@@ -58,13 +58,15 @@ EXTERNAL_SYMBOLS = {
     "^SPX": "2006-01-04",      # S&P 500 指数
     # "^NKX": "2006-01-04",      # 日经225指数
     # "1321.JP": "2007-07-30",   # 日经225 ETF (野村)
-    "^DAX": "2006-01-04",      # 德国DAX指数
+    # "^DAX": "2006-01-04",      # 德国DAX指数
     # "EXS1.DE": "2007-01-04"    # 德国DAX ETF (iShares)
 }
 
 YAHOO_SYMBOLS = {
     # "^N225": "2006-01-04",      # 日经225指数（现货）
-    "1321.T": "2006-01-04",     # 日经225ETF（现货）
+    "1321.T": "2010-02-05",     # 日经225ETF（现货）
+    # "^GDAXI":"2006-01-04",     # 德国指数
+    "EXS1.DE":"2009-01-02",    ## 德国ETF
 }
 
 
@@ -489,7 +491,8 @@ def update_yahoo_short_data(new_end: str = NEW_DATE):
             new_data[symbol] = df
 
     for symbol, short_df in new_data.items():
-        long_fp = os.path.join(CONFIG["long_path"], f"{symbol}.csv")
+        safe_name = _get_safe_filename(symbol) 
+        long_fp = os.path.join(CONFIG["long_path"], f"{safe_name}.csv")
         if not os.path.exists(long_fp):
             continue
         long_df = pd.read_csv(long_fp, encoding="utf-8-sig")
@@ -515,12 +518,12 @@ def update_yahoo_short_data(new_end: str = NEW_DATE):
 # ===================== 执行入口 =====================
 if __name__ == "__main__":
     # Wind 数据
-    # generate_long_data()
-    update_short_data()
+    generate_long_data()
+    # update_short_data()
 
     # Stooq 海外数据
-    # generate_external_long_data(end_date=CONFIG["end_date"])
-    update_external_short_data(new_end=NEW_DATE)
+    generate_external_long_data(end_date=CONFIG["end_date"])
+    # update_external_short_data(new_end=NEW_DATE)
 
     # generate_yahoo_long_data(end_date=CONFIG["end_date"])
     update_yahoo_short_data(new_end=NEW_DATE)
