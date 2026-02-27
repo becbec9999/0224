@@ -29,12 +29,16 @@ CONFIG = {
         "PriceAdj": "U"           # 价格不复权Calendar": "SSE", "Currency": "Original", "PriceAdj": "U"
     },
     "symbols": {
-    "980092.CNI": "2013-01-02",    # 自由现金流指数
-    "h30269.CSI": "2018-05-11",    # 红利低波指数
+    "881001.WI": "2004-12-31",     # 万得全A
+    "000016.SH": "2004-01-02",     # 上证50指数  
+    "000300.SH": "2005-01-04",     # 沪深300指数
     "000905.SH": "2005-01-04",     # 中证500指数
+    "000852.SH": "2014-10-17",     # 中证1000指数
     "932000.CSI": "2014-01-02",    # 中证2000指数
     "000688.SH": "2020-01-02",     # 科创50指数
-    "000300.SH": "2005-01-04",     # 沪深300指数
+    "8841431.WI": "2009-05-27",    # 万得微盘股等权指数     
+    "980092.CNI": "2013-01-02",    # 自由现金流指数
+    "h30269.CSI": "2018-05-11",    # 红利低波指数
     "HSHYLV.HI": "2017-05-22",     # 恒生港股通高股息低波动指数
     "HSBIO.HI": "2019-12-16",      # 恒生生物科技指数
     "HSTECH.HI": "2020-07-27",     # 恒生科技指数
@@ -49,9 +53,12 @@ CONFIG = {
     "511260.SH": "2017-08-24",     # 十年国债ETF
     "511220.SH": "2014-12-16",     # 城投债ETF（海富通）
     "159972.SZ": "2019-11-08",     # 5年地债ETF
-    "159816.SZ": "2020-09-04"      # 0-4年地债ETF
+    "159816.SZ": "2020-09-04",     # 0-4年地债ETF
+    "513520.SH": "2019-06-25",      # 日经ETF
+    "513030.SH": "2014-09-05"      # 德国ETF
     }
 }
+
 
 EXTERNAL_SYMBOLS = {
     "^DJI": "2006-01-04",      # 道琼斯工业指数
@@ -201,6 +208,7 @@ def _reprocess_nulls_for_aligned(df: pd.DataFrame, end: str) -> pd.DataFrame:
     df["date"] = df["date"].dt.strftime("%Y-%m-%d")
     return df
 
+
 # ===================== 数据抓取与清洗 =====================
 def _fetch_clean(symbol: str, start: str, end: str, params: dict) -> pd.DataFrame | None:
     """从Wind获取并清洗量价数据（open/close/high/low/volume）"""
@@ -260,6 +268,9 @@ def _fetch_clean(symbol: str, start: str, end: str, params: dict) -> pd.DataFram
 
     print(f"✅ {symbol}: 抓取 {len(df)} 条有效数据")
     return df
+
+
+
 
 def _fetch_clean_stooq(name: str, symbol: str, start: str, end: str) -> pd.DataFrame | None:
     """
@@ -519,13 +530,13 @@ def update_yahoo_short_data(new_end: str = NEW_DATE):
 if __name__ == "__main__":
     # Wind 数据
     generate_long_data()
-    # update_short_data()
+    update_short_data()
 
     # Stooq 海外数据
-    generate_external_long_data(end_date=CONFIG["end_date"])
+    # generate_external_long_data(end_date=CONFIG["end_date"])
     # update_external_short_data(new_end=NEW_DATE)
 
     # generate_yahoo_long_data(end_date=CONFIG["end_date"])
-    update_yahoo_short_data(new_end=NEW_DATE)
+    # update_yahoo_short_data(new_end=NEW_DATE)
 
     
